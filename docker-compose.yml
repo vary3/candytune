@@ -1,0 +1,18 @@
+services:
+  candytune-cli:
+    build: .
+    image: candytune-cli:local
+    entrypoint: ["python", "-m", "app.cli.candytune_cli"]
+    volumes:
+      - ./app:/app/app
+      - ./workspace:/app/workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+      - CANDYTUNE_INPUT=/app/workspace/input
+      - CANDYTUNE_OUTPUT=/app/workspace/output
+      - CANDYTUNE_PAPER=A3
+    mem_limit: "8g"
+    cpus: "2"
+    shm_size: "2g"
+    tmpfs:
+      - /tmp:size=2g,exec
