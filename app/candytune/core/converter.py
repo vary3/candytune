@@ -77,6 +77,8 @@ def _sanitize_filename(filename: str) -> str:
         ']': '_',
         '［': '_',  # Full-width brackets
         '］': '_',
+        '【': '_',  # Corner brackets (sumitsuki-kakko)
+        '】': '_',
     }
     for old, new in replacements.items():
         filename = filename.replace(old, new)
@@ -569,21 +571,33 @@ def _fix_pdf_page_orientation_to_landscape(pdf_path: Path) -> None:
 
 
 def convert_excel_to_pdf_fit_one_page(input_path: Path, output_pdf: Path) -> Path:
-    """ExcelファイルをPDFに変換する（各シート1ページ）
+    """Convert Excel file to PDF (1 page per sheet)
     
-    注意: LibreOffice CalcはIsLandscape設定をPDF出力時に無視する既知の問題があります。
-    そのため、1ページに収まりますが、縦向きA4で出力されます。
+    Note: LibreOffice Calc has a known issue where IsLandscape setting is ignored during PDF export.
+    Files will fit on one page but may be in portrait A4 orientation.
     """
     if uno is None:
         raise ConversionError("UNO bindings not available for Excel conversion")
 
-    # UNOサーバーに接続
+    # Sanitize filename if it contains special characters
+    sanitized_stem = _sanitize_filename(input_path.stem)
+    needs_sanitize = sanitized_stem != input_path.stem
+    
+    # Create temporary file with sanitized name if needed
+    convert_path = input_path
+    temp_path = None
+    if needs_sanitize:
+        temp_path = output_pdf.parent / f"{sanitized_stem}{input_path.suffix}"
+        shutil.copy2(input_path, temp_path)
+        convert_path = temp_path
+
+    # Connect to UNO server
     ctx = _connect_to_uno()
     smgr = ctx.ServiceManager
     desktop = smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
 
-    # ドキュメントを読み込み
-    in_url = input_path.resolve().as_uri()
+    # Load document
+    in_url = convert_path.resolve().as_uri()
     props = (_uno_property("Hidden", True),)
     doc = desktop.loadComponentFromURL(in_url, "_blank", 0, props)
 
@@ -612,6 +626,9 @@ def convert_excel_to_pdf_fit_one_page(input_path: Path, output_pdf: Path) -> Pat
         doc.storeToURL(out_url, export_props)
     finally:
         doc.close(True)
+        # Clean up temporary file
+        if temp_path and temp_path.exists():
+            temp_path.unlink()
 
     return output_pdf
 
