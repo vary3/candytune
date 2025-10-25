@@ -55,9 +55,50 @@ def _imagemagick_convert_cmd() -> list[str]:
     raise ConversionError("ImageMagick 'convert' (or 'magick convert') not found")
 
 
+def _sanitize_filename(filename: str) -> str:
+    """Remove special characters from filename to make it safe"""
+    # Replace special characters (both half-width and full-width)
+    replacements = {
+        ':': '_',   # Half-width colon
+        '：': '_',  # Full-width colon
+        '/': '_',
+        '\\': '_',
+        '*': '_',
+        '?': '_',
+        '"': '_',
+        '<': '_',
+        '>': '_',
+        '|': '_',
+        '(': '_',   # Parentheses
+        ')': '_',
+        '（': '_',  # Full-width parentheses
+        '）': '_',
+        '[': '_',   # Brackets
+        ']': '_',
+        '［': '_',  # Full-width brackets
+        '］': '_',
+    }
+    for old, new in replacements.items():
+        filename = filename.replace(old, new)
+    return filename
+
+
 def convert_office_to_pdf(input_path: Path, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     soffice = _find_soffice_executable()
+    
+    # Sanitize filename if it contains special characters
+    sanitized_stem = _sanitize_filename(input_path.stem)
+    needs_sanitize = sanitized_stem != input_path.stem
+    
+    # Create temporary file with sanitized name if needed
+    convert_path = input_path
+    if needs_sanitize:
+        # Create a temporary copy with sanitized filename
+        temp_path = output_dir / f"{sanitized_stem}{input_path.suffix}"
+        shutil.copy2(input_path, temp_path)
+        convert_path = temp_path
+    
     cmd = [
         soffice,
         "--headless",
@@ -67,7 +108,7 @@ def convert_office_to_pdf(input_path: Path, output_dir: Path) -> Path:
         "pdf:calc_pdf_Export" if input_path.suffix.lower() in {".xls", ".xlsx", ".xlsm"} else "pdf",
         "--outdir",
         str(output_dir),
-        str(input_path),
+        str(convert_path),
     ]
     try:
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -75,8 +116,13 @@ def convert_office_to_pdf(input_path: Path, output_dir: Path) -> Path:
         raise ConversionError("LibreOffice 'soffice' not found")
     except subprocess.CalledProcessError as e:
         raise ConversionError(e.stderr.decode("utf-8", errors="ignore"))
+    finally:
+        # Clean up temporary file
+        if needs_sanitize and convert_path.exists():
+            convert_path.unlink()
 
-    pdf_path = output_dir / (input_path.stem + ".pdf")
+    # Output PDF path (with sanitized filename)
+    pdf_path = output_dir / (sanitized_stem + ".pdf")
     if not pdf_path.exists():
         # LibreOffice may output with upper-case or different casing in rare cases
         candidates = list(output_dir.glob(input_path.stem + "*.pdf"))
@@ -559,7 +605,8 @@ def convert_excel_to_pdf_fit_one_page(input_path: Path, output_pdf: Path) -> Pat
         except Exception:
             pass
 
-        # PDFにエクスポート
+        # Export to PDF using LibreOffice defaults
+        # Minimal configuration to avoid interfering with sheet page settings (ScaleToPagesX/Y)
         out_url = output_pdf.resolve().as_uri()
         export_props = (_uno_property("FilterName", "calc_pdf_Export"),)
         doc.storeToURL(out_url, export_props)
