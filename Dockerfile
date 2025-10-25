@@ -40,7 +40,7 @@ COPY app/ /app/app/
 
 # Python deps
 RUN pip install --upgrade pip && \
-    pip install pydantic pikepdf
+    pip install pydantic pikepdf rich
 
 # CLI 実行をデフォルトに（ヘルプ表示）
 CMD ["python", "-m", "app.cli.candytune_cli", "--help"]
