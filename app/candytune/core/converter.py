@@ -82,7 +82,17 @@ def convert_office_to_pdf(input_path: Path, output_dir: Path) -> Path:
         candidates = list(output_dir.glob(input_path.stem + "*.pdf"))
         if candidates:
             return candidates[0]
-        raise ConversionError("PDF output not found")
+        # Check all PDFs in output directory
+        all_pdfs = list(output_dir.glob("*.pdf"))
+        if all_pdfs:
+            # PDF was generated with unexpected name
+            raise ConversionError(
+                f"PDF generated with unexpected name (expected: {pdf_path.name}, found: {', '.join([p.name for p in all_pdfs[:3]])})"
+            )
+        # No PDF was generated at all
+        raise ConversionError(
+            f"LibreOffice conversion failed (file may be corrupted or in unsupported format)"
+        )
     return pdf_path
 
 
@@ -507,9 +517,9 @@ def _fix_pdf_page_orientation_to_landscape(pdf_path: Path) -> None:
         if modified:
             pdf.save(pdf_path)
         pdf.close()
-    except Exception as e:
-        # pikepdf処理が失敗しても、元のPDFは残る
-        print(f"Warning: Failed to fix PDF orientation: {e}", file=sys.stderr)
+    except Exception:
+        # pikepdf処理が失敗しても、元のPDFは残る（警告なし）
+        pass
 
 
 def convert_excel_to_pdf_fit_one_page(input_path: Path, output_pdf: Path) -> Path:
@@ -595,10 +605,8 @@ def convert_to_pdf(input_path: Path, workdir: Optional[Path] = None, image_dpi: 
                 output_pdf = workdir / (input_path.stem + ".pdf")
                 try:
                     return convert_excel_to_pdf_fit_one_page(input_path, output_pdf)
-                except Exception as e:
-                    # フォールバック: 標準のLibreOffice変換を使用
-                    import sys
-                    print(f"Warning: UNO conversion failed ({e}), using standard conversion", file=sys.stderr)
+                except Exception:
+                    # フォールバック: 標準のLibreOffice変換を使用（警告なし）
                     pass
             return convert_office_to_pdf(input_path, workdir)
         if suffix in {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp"}:
