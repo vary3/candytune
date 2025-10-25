@@ -82,16 +82,16 @@ def convert_office_to_pdf(input_path: Path, output_dir: Path) -> Path:
         candidates = list(output_dir.glob(input_path.stem + "*.pdf"))
         if candidates:
             return candidates[0]
-        # 出力ディレクトリ内のすべてのPDFを確認
+        # Check all PDFs in output directory
         all_pdfs = list(output_dir.glob("*.pdf"))
         if all_pdfs:
-            # 予期しない名前でPDFが生成されている場合
+            # PDF was generated with unexpected name
             raise ConversionError(
-                f"PDFファイルが予期しない名前で生成されました（期待: {pdf_path.name}、実際: {', '.join([p.name for p in all_pdfs[:3]])}）"
+                f"PDF generated with unexpected name (expected: {pdf_path.name}, found: {', '.join([p.name for p in all_pdfs[:3]])})"
             )
-        # PDFが全く生成されなかった場合
+        # No PDF was generated at all
         raise ConversionError(
-            f"LibreOfficeによる変換に失敗しました（ファイルが破損しているか、対応していない形式の可能性があります）"
+            f"LibreOffice conversion failed (file may be corrupted or in unsupported format)"
         )
     return pdf_path
 
